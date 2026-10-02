@@ -1,0 +1,137 @@
+﻿@using System.Drawing
+@inject GameState State
+
+<HeadContent>
+    <style>
+        :root {
+            --board-bg: @ColorTranslator.ToHtml(BoardColor);
+            --player1: @ColorTranslator.ToHtml(Player1Color);
+            --player2: @ColorTranslator.ToHtml(Player2Color);
+        }
+
+        /* Highlighting rule for the winning pieces */
+        div.board + span.winner,
+        span.winner {
+            z-index: 100 !important;
+            animation: pulse-winning-piece 0.7s infinite alternate ease-in-out !important;
+            box-shadow: 0 0 18px 6px #ffd700, inset 0 0 10px #ffffff !important;
+            border: 4px solid #ffffff !important;
+            border-radius: 50% !important;
+        }
+
+        @@keyframes pulse-winning-piece {
+            0% {
+                transform: scale(1.0);
+                filter: brightness(1.2);
+            }
+            100% {
+                transform: scale(1.2);
+                filter: brightness(1.8);
+                box-shadow: 0 0 28px 10px #ffea00, inset 0 0 12px #ffffff !important;
+            }
+        }
+    </style>
+</HeadContent>
+
+<nav>
+    @for (byte i = 0; i < 7; i++)
+    {
+        var col = i;
+        <span title="Click to play a piece" @onclick="() => PlayPiece(col)">🔽</span>
+    }
+</nav>
+
+<article>
+    @winnerMessage  <button style="@ResetStyle" @onclick="ResetGame">Reset the game</button>
+    <br />
+    <span class="alert-danger">@errorMessage</span>
+    <span class="alert-info">@CurrentTurn</span>
+</article>
+
+<div>
+   <div class="board">
+      @for (var i = 0; i < 42; i++)
+      {
+         <span class="container">
+            <span></span>
+         </span>
+      }
+   </div>
+   @for (var i = 0; i < 42; i++)
+   {    
+       var isWinningPiece = winningPositions.Contains(i) ? "winner" : "";
+       <span class="@boardPieces[i] @isWinningPiece"></span>
+   }
+</div>
+
+@code {
+    private string[] boardPieces = new string[42];
+    private string winnerMessage = string.Empty;
+    private string errorMessage = string.Empty;
+    private List<int> winningPositions = new List<int>();
+
+    private string CurrentTurn => (winnerMessage == string.Empty) ? $"Player {State.PlayerTurn}'s Turn" : "";
+    private string ResetStyle => (winnerMessage == string.Empty) ? "display: none;" : "";
+
+    [Parameter]
+    public Color BoardColor { get; set; } = ColorTranslator.FromHtml("yellow");
+
+    [Parameter]
+    public Color Player1Color { get; set; } = ColorTranslator.FromHtml("red");
+
+    [Parameter]
+    public Color Player2Color { get; set; } = ColorTranslator.FromHtml("blue");
+
+    protected override void OnInitialized()
+    {
+        State.ResetBoard();
+    }
+
+    private void PlayPiece(byte col)
+    {
+        errorMessage = string.Empty;
+        try
+        {
+            var player = State.PlayerTurn;
+            var landingSpotIndex = GetLandingSpotIndex(col); // Get actual board index (0-41)
+            var landingRow = State.PlayPiece(col);
+
+            // Assign CSS classes directly to the exact board cell index
+            boardPieces[landingSpotIndex] = $"player{player} col{col} drop{landingRow}";
+        }
+        catch (ArgumentException ex)
+        {
+            errorMessage = ex.Message;
+            return;
+        }
+
+        var winState = State.CheckForWin(out winningPositions);
+        winnerMessage = winState switch
+        {
+            GameState.WinState.Player1_Wins => "Player 1 Wins!",
+            GameState.WinState.Player2_Wins => "Player 2 Wins!",
+            GameState.WinState.Tie => "It's a tie!",
+            _ => ""
+        };
+    }
+
+    private int GetLandingSpotIndex(byte col)
+    {
+        var landingSpot = (int)col;
+        for (var i = (int)col; i < 42; i += 7)
+        {
+            if (landingSpot + 7 >= 42 || State.TheBoard[landingSpot + 7] != 0) break;
+            landingSpot = i;
+        }
+        return landingSpot;
+    }
+
+    private void ResetGame()
+    {
+        State.ResetBoard();
+        winnerMessage = string.Empty;
+        errorMessage = string.Empty;
+        boardPieces = new string[42];
+        winningPositions.Clear();
+    }
+}
